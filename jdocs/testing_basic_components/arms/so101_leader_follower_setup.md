@@ -39,13 +39,19 @@ ls -l /dev/ttyACM*
 
 **Expected output:** 4 USB ports
 ```
-/dev/ttyACM0  (Left follower)
-/dev/ttyACM1  (Right follower)
-/dev/ttyACM2  (Left leader)
-/dev/ttyACM3  (Right leader)
+/dev/ttyACM0  (Left leader)
+/dev/ttyACM1  (Right leader)
+/dev/ttyACM2  (Left follower)
+/dev/ttyACM3  (Right follower)
 ```
 
-**Note:** Your port assignments may differ. To identify which port is which, disconnect one arm at a time and check which port disappears.
+**Note:** Port assignments depend on USB plug-in order and can change between reboots!
+
+**To identify current port mapping:**
+```bash
+python -m lerobot.scripts.lerobot_find_port
+```
+Then unplug one arm at a time and run again to see which port disappears.
 
 ---
 
@@ -59,12 +65,12 @@ If not already calibrated:
 # Calibrate left follower
 python -m lerobot.scripts.lerobot_calibrate \
   --robot.type=so101_follower \
-  --robot.port=/dev/ttyACM0 \
+  --robot.port=/dev/ttyACM2 \
   --robot.id=xlerobot_left_arm
 
 # Calibrate right follower
 python -m lerobot.scripts.lerobot_calibrate \
-  --robot.port=/dev/ttyACM1 \
+  --robot.port=/dev/ttyACM3 \
   --robot.id=xlerobot_right_arm
 ```
 
@@ -79,13 +85,13 @@ python -m lerobot.scripts.lerobot_calibrate \
 # Calibrate left leader
 python -m lerobot.scripts.lerobot_calibrate \
   --teleop.type=so101_leader \
-  --teleop.port=/dev/ttyACM2 \
+  --teleop.port=/dev/ttyACM0 \
   --teleop.id=xlerobot_left_leader
 
 # Calibrate right leader
 python -m lerobot.scripts.lerobot_calibrate \
   --teleop.type=so101_leader \
-  --teleop.port=/dev/ttyACM3 \
+  --teleop.port=/dev/ttyACM1 \
   --teleop.id=xlerobot_right_leader
 ```
 
@@ -102,10 +108,10 @@ python -m lerobot.scripts.lerobot_calibrate \
 ```bash
 python -m lerobot.scripts.lerobot_teleoperate \
   --robot.type=so101_follower \
-  --robot.port=/dev/ttyACM0 \
+  --robot.port=/dev/ttyACM2 \
   --robot.id=xlerobot_left_arm \
   --teleop.type=so101_leader \
-  --teleop.port=/dev/ttyACM2 \
+  --teleop.port=/dev/ttyACM0 \
   --teleop.id=xlerobot_left_leader
 ```
 
@@ -116,10 +122,10 @@ python -m lerobot.scripts.lerobot_teleoperate \
 ```bash
 python -m lerobot.scripts.lerobot_teleoperate \
   --robot.type=so101_follower \
-  --robot.port=/dev/ttyACM1 \
+  --robot.port=/dev/ttyACM3 \
   --robot.id=xlerobot_right_arm \
   --teleop.type=so101_leader \
-  --teleop.port=/dev/ttyACM3 \
+  --teleop.port=/dev/ttyACM1 \
   --teleop.id=xlerobot_right_leader
 ```
 
@@ -135,10 +141,10 @@ python -m lerobot.scripts.lerobot_teleoperate \
 ```bash
 python -m lerobot.scripts.lerobot_teleoperate \
   --robot.type=so101_follower \
-  --robot.port=/dev/ttyACM0 \
+  --robot.port=/dev/ttyACM2 \
   --robot.id=xlerobot_left_arm \
   --teleop.type=so101_leader \
-  --teleop.port=/dev/ttyACM2 \
+  --teleop.port=/dev/ttyACM0 \
   --teleop.id=xlerobot_left_leader
 ```
 
@@ -146,10 +152,10 @@ python -m lerobot.scripts.lerobot_teleoperate \
 ```bash
 python -m lerobot.scripts.lerobot_teleoperate \
   --robot.type=so101_follower \
-  --robot.port=/dev/ttyACM1 \
+  --robot.port=/dev/ttyACM3 \
   --robot.id=xlerobot_right_arm \
   --teleop.type=so101_leader \
-  --teleop.port=/dev/ttyACM3 \
+  --teleop.port=/dev/ttyACM1 \
   --teleop.id=xlerobot_right_leader
 ```
 
@@ -224,14 +230,16 @@ sudo usermod -a -G dialout $USER
 
 ## Port Reference
 
-Your verified port mapping:
+Your current port mapping (verified 2025-11-08):
 
 | Device | USB Port | Calibration ID |
 |--------|----------|----------------|
-| Left Follower | `/dev/ttyACM0` | `xlerobot_left_arm` |
-| Right Follower | `/dev/ttyACM1` | `xlerobot_right_arm` |
-| Left Leader | `/dev/ttyACM2` | `xlerobot_left_leader` |
-| Right Leader | `/dev/ttyACM3` | `xlerobot_right_leader` |
+| Left Leader | `/dev/ttyACM0` | `xlerobot_left_leader` |
+| Right Leader | `/dev/ttyACM1` | `xlerobot_right_leader` |
+| Left Follower | `/dev/ttyACM2` | `xlerobot_left_arm` |
+| Right Follower | `/dev/ttyACM3` | `xlerobot_right_arm` |
+
+**⚠️ Important:** These port assignments can change! Always verify with `python -m lerobot.scripts.lerobot_find_port` before running commands.
 
 ---
 

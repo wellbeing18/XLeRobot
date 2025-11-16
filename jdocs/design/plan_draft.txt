@@ -1,0 +1,40 @@
+Context: I am on a geforce rtx omen ubuntu installed computer. I have downloaded the lerobot and xlerobot
+githubs and installed pytorch, cuda, and other required libraries to my knowledge. I bought the xlerobot
+setup which includes an ikea cart, two soarm101 arms with 1 uvc camera on each and a "head" with a uvc
+camera too. There is also a wheel base with 3 wheels. My end goal is to create my own robotic innovation.
+I'm not quite sure what it is yet. Maybe an architecture innovation? Completely disregard that. The 
+point is that before I can get to innovating I need to understand what I currently have because I have
+never done robotics before. I have a bit of machine learning background but don't assume I'm a pro 
+and also no robotics background. Originally my plan was to start with an mvp. which included testing
+out if the arms work through keyboard control, leader arms, cameras work, etc. Then to get a pretrained
+model to "plug and play" to see if it will work to control my robot. This was detailed in "xlerobot_mvp_plan_v1.md"
+under jdocs/design.
+
+Situation: I have already completed testing the arms and cameras(check arms and camera folder under 
+testing_basic_components). So I started to test a model. I chose smolvla, but it didn't work(movements were
+almost twitchy in the way that it was moving in tiny movements and not really towards the goal which was
+to pick up the red cube. it opened the gripper a bit, closed a bit, moved right a bit, etc. This could 
+have been because of multiple reasons like my setup is different, the lighting is different, the model
+was pretrained on soarm100..?). After, I tried a pick and place act and a community smolvla. But both 
+failed to run so I couldn't even see how the robot behaved. The main reason was because lerobot 
+apparently had an update recently. So its changed/broken a lot of stuff. Some errors were from missing 
+configuration files and other errors were from missing preprocessor files.
+
+Question(s): I need you to answer 2 questions in detail based on research and remember that I am in the 
+planning stage so don't be led on by my words. You can contradict me, question me, etc. The first question
+is, how does the lerobot pipeline work? I sort of understand bits and pieces of these things like
+configuration files but I don't understand where that fits into the pipeline, what the update changed, etc.
+The second question is, what do you think I should do moving forward. Currently what I was thinking my two
+options were are: start trying to finetune the working smovla with my own recording data or try to regress
+to the old lerobot version and run my "mvp" of getting a working pretrained model. The reason why I'm 
+unsure what to do(and I'm just thinking out loud here so don't take what I'm saying as absolute) is because
+I assumed the model would be plug and play. But if its not, and I eventually have to finetune a model 
+anyways, is it pointless to regress and run the mvp? Or should I do something like regress to make sure
+I'm using a working base model? Or some other path? and give research and logic to support your reasoning.
+
+
+
+
+finetuning => align virtual and physical
+
+can once align use vlm generalize to more atomic tasks.

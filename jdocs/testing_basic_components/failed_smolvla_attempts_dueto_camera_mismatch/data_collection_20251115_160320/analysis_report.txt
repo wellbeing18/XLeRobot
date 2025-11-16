@@ -1,0 +1,61 @@
+============================================================
+Data Collection Analysis Report
+============================================================
+Directory: data_collection_20251115_160320
+
+Data Files:
+  Actions: 36 rows
+  Robot State: 0 rows
+  Model Outputs: 36 rows
+  Camera1 Snapshots: 0
+  Camera2 Snapshots: 0
+
+Action Statistics (Commanded):
+  shoulder_pan:
+    Mean:   98.43°  Std:  29.33°
+    Range: [  -1.38°,  130.00°]
+  shoulder_lift:
+    Mean:  -34.44°  Std:   9.91°
+    Range: [ -48.11°,  -19.21°]
+  elbow_flex:
+    Mean:   94.82°  Std:  12.51°
+    Range: [  65.19°,  112.83°]
+  wrist_flex:
+    Mean:   74.20°  Std:   6.60°
+    Range: [  65.47°,   91.04°]
+  wrist_roll:
+    Mean:  -32.84°  Std:   9.72°
+    Range: [ -41.45°,  -11.85°]
+  gripper:
+    Mean:   11.83°  Std:  11.40°
+    Range: [  -1.07°,   30.16°]
+
+Tracking Error Analysis:
+  shoulder_pan: Mean=nan°, Max=nan°
+  shoulder_lift: Mean=nan°, Max=nan°
+  elbow_flex: Mean=nan°, Max=nan°
+
+Denormalization Check:
+  Joint 0: ✅ Working (scale ratio: 48.8x)
+  Joint 1: ✅ Working (scale ratio: 88.3x)
+  Joint 2: ✅ Working (scale ratio: 907.5x)
+  Joint 3: ✅ Working (scale ratio: 318.2x)
+  Joint 4: ✅ Working (scale ratio: 36.9x)
+  Joint 5: ✅ Working (scale ratio: 31.1x)
+
+Key Findings:
+  ✅ Actions in degree range (max magnitude > 10°)
+  ✅ Denormalization is working
+  ❌ High tracking error (nan°)
+
+============================================================
+Next Steps:
+1. Review snapshots/ to see what robot saw
+2. Check analysis_plots.png for visual analysis
+3. If actions look reasonable but task fails:
+   → Camera domain mismatch (different viewpoint)
+   → Need fine-tuning with your own data
+4. If actions look random/chaotic:
+   → Model not understanding the task
+   → Check camera images quality
+============================================================
