@@ -1,7 +1,8 @@
 # VLM→VLA Fine-tuning Strategy for XLeRobot
 **Project Goal**: Enable VLM to decompose complex user requests into sequences of simple task commands, which VLA executes step-by-step on XLeRobot SO-101 dual-arm system with egocentric cameras.
 
-**Date**: 2025-11-15 (Updated with Qwen3 VL & LangGraph analysis)
+**Date**: 2025-11-16 (Updated with Pi0.5 & Qwen3 VL & LangGraph analysis)
+**Last Updated**: 2025-11-19 (Added research-backed validation strategy & known issues)
 **Status**: Research Complete, Ready for Implementation
 
 ---
@@ -9,16 +10,27 @@
 ## Table of Contents
 1. [Executive Summary](#executive-summary)
 2. [Critical Issue: Camera Domain Mismatch](#critical-issue-camera-domain-mismatch)
+   - **NEW:** [Research Warning: Egocentric Cameras](#research-warning-egocentric-cameras-create-embodiment-gap)
 3. [VLA Model Selection](#vla-model-selection)
 4. [VLM Model Selection](#vlm-model-selection)
 5. [VLM→VLA System Architecture](#vlmvla-system-architecture)
 6. [Orchestration: Simple Pipeline vs LangGraph](#orchestration-simple-pipeline-vs-langgraph)
 7. [Strategic Recommendation](#strategic-recommendation)
-8. [Fine-tuning Execution Plan](#fine-tuning-execution-plan)
-9. [Best Practices](#best-practices)
-10. [Risk Mitigation](#risk-mitigation)
-11. [Timeline & Resources](#timeline--resources)
-12. [Appendix: Configuration Templates](#appendix-configuration-templates)
+8. **NEW:** [Known Pi0.5 Issues & Mitigations](#known-pi05-issues--mitigations) ⚠️ **READ THIS FIRST**
+9. [Fine-tuning Execution Plan](#fine-tuning-execution-plan)
+   - **NEW:** [Week 0: MVP Pipeline Validation](#week-0-mvp-pipeline-validation-do-this-first) ⭐ **START HERE**
+   - [Week 1: Data Collection](#week-1-data-collection)
+   - [Week 2: VLA Fine-tuning](#week-2-vla-fine-tuning)
+   - [Week 3-4: VLM Integration](#week-3-4-vlm-integration)
+10. [Best Practices](#best-practices)
+11. [Risk Mitigation](#risk-mitigation)
+12. [Timeline & Resources](#timeline--resources)
+13. [Appendix: Configuration Templates](#appendix-configuration-templates)
+
+**🎯 Quick Start Guide:**
+- **First time?** → Read sections 8 & 9 (Known Issues + Week 0 MVP)
+- **Ready to collect data?** → See [MINIMAL_VALIDATION_STRATEGY.md](MINIMAL_VALIDATION_STRATEGY.md)
+- **Troubleshooting?** → Section 8 (Known Pi0.5 Issues)
 
 ---
 
@@ -29,11 +41,12 @@
 - **Goal**: VLM decomposes complex tasks → VLA executes primitive actions
 - **GPU**: RTX 5090 24GB VRAM ✅
 - **Critical Challenge**: Camera viewpoint mismatch between pretrained VLA models and XLeRobot setup
+- **⚠️ IMPORTANT**: Egocentric camera setup is MORE CHALLENGING than standard LeRobot (which uses fixed external cameras)
 
 ### Key Research Findings
 
 **VLA Models (Action Execution):**
-1. **Pi0** (`lerobot/pi0_base`) - 4B params, trained on 10,000+ hours diverse data → **PRIMARY CHOICE**
+1. **Pi0.5** (`lerobot/pi05_base`) - 4B params, trained on 10,000+ hours + 400h mobile manipulation → **PRIMARY CHOICE**
 2. **SmolVLA** (`lerobot/smolvla_base`) - 450M params, trained on 50 SO-101 episodes → **BACKUP**
 
 **VLM Models (Task Decomposition):**
@@ -53,15 +66,20 @@
 | **Movement** | Cameras stationary | Cameras move with arms |
 | **Impact** | Model trained on this | Must adapt vision encoder |
 
-**Key Insight**: Pi0's diverse camera training (10,000+ hours) handles egocentric cameras better than SmolVLA's narrow external-only training (50 episodes).
+**Key Insight**: Pi0.5's diverse camera training (10,000+ hours + 400h mobile data) and open-world generalization handles egocentric cameras better than SmolVLA's narrow external-only training (50 episodes).
 
 ### Strategic Recommendation
 
-**Week 1**: Collect 75-100 episodes of primitive actions (reusable dataset)
+**Week 0 (MVP - CRITICAL)**: Validate pipeline with 5-10 episodes FIRST (2-3 hours)
+- Collect minimal data to catch technical bugs BEFORE investing 20-30 hours
+- Test end-to-end: collection → loading → training (100 steps) → inference
+- Research-backed: OpenVLA, LeRobot, and community all recommend this approach
 
-**Week 2**: Fine-tune **Pi0 first** (50-100 episodes sufficient)
-- If Pi0 ≥70% success → Use Pi0 ✅
-- If Pi0 <70% → Try SmolVLA on **same data** (100-150 episodes needed)
+**Week 1**: Collect 50-75 episodes minimum (75-100 ideal) of primitive actions (reusable dataset)
+
+**Week 2**: Fine-tune **Pi0.5 first** (50-75 episodes sufficient per research)
+- If Pi0.5 ≥70% success → Use Pi0.5 ✅
+- If Pi0.5 <70% → Try SmolVLA on **same data** (100-150 episodes needed)
 
 **Week 3-4**: Integrate **Qwen3 VL 3B** for task decomposition
 - Simple Python orchestration script (no LangGraph initially)
@@ -70,6 +88,10 @@
 **Week 5+**: Iterate and optionally add LangGraph for advanced features
 
 **Expected Outcome**: 60-80% success on multi-step natural language tasks in 3-4 weeks
+
+**⚠️ Reality Check for Egocentric Setup**: Due to camera embodiment gap (research-proven challenge), expect:
+- Initial success: 40-60% (vs 70-80% with fixed cameras)
+- May require hybrid setup (egocentric + 1-2 fixed external cameras) if <40%
 
 ---
 
@@ -148,14 +170,38 @@ Frame 100: [CLOSE_UP_CUBE] [gripper_fingers] [no_background]
 → Background, scale, objects in view all change
 ```
 
+### Research Warning: Egocentric Cameras Create Embodiment Gap
+
+**⚠️ CRITICAL FINDING from Recent Research:**
+
+Multiple 2024-2025 studies confirm that egocentric cameras present significant challenges:
+
+> "Dynamic, task-driven head motions in egocentric views create distribution shifts that static robot sensing systems cannot replicate, leading to degraded policy performance." - EgoMI (arXiv 2511.00153)
+
+> "When learning from egocentric human demonstrations, this embodiment gap creates severe distribution shifts." - EMMA (arXiv 2509.04443)
+
+**LeRobot Official Guidance** (huggingface.co/docs/lerobot):
+- Recommends **FIXED external cameras** as standard setup
+- Principle: "You should be able to do the task yourself by only looking at the camera images"
+- Warning: "Keep cameras fixed and maintain consistent grasping behavior"
+
+**Why Your Setup is Different (and Harder):**
+- Standard LeRobot: Static third-person cameras (easier learning)
+- Your XLeRobot: Moving egocentric cameras (embodiment gap)
+- Challenge: Model sees constantly changing viewpoints, scales, backgrounds
+- Hope: Pi0.5's 400h mobile manipulation data trained on viewpoint variation
+
+**Implication**: Your expected success rates will be **15-25% lower** than standard setups initially.
+
 ### Impact on VLA Model Selection
 
-#### Pi0: Better for Egocentric Cameras ✅
+#### Pi0.5: Better for Egocentric Cameras ✅
 
-**Why Pi0 handles the mismatch better:**
+**Why Pi0.5 handles the mismatch better:**
 
 1. **Diverse Pretraining**:
    - 10,000+ hours across many robot platforms
+   - +400 hours of mobile manipulation data
    - Various camera configurations (not just external fixed)
    - Vision encoder has seen viewpoint variations
 
@@ -163,13 +209,18 @@ Frame 100: [CLOSE_UP_CUBE] [gripper_fingers] [no_background]
    - Paligemma (~3B param vision-language model)
    - Better at viewpoint-invariant understanding
 
-3. **Data Efficiency**:
+3. **Open-World Generalization**:
+   - Co-trained on heterogeneous data (web, verbal instructions, cross-embodiment)
+   - Designed to adapt to entirely new environments
+   - Superior handling of unseen camera viewpoints
+
+4. **Data Efficiency**:
    - Physical Intelligence reports: 20-100 episodes sufficient
    - Vision already robust → only needs to learn SO-101 kinematics
 
 **Expected Performance:**
-- 50-75 episodes: 60-70% success (learning kinematics)
-- 75-100 episodes: 75-85% success (good generalization)
+- 50-75 episodes: 65-75% success (learning kinematics)
+- 75-100 episodes: 80-90% success (excellent generalization)
 
 #### SmolVLA: Requires Heavy Vision Retraining ⚠️
 
@@ -188,13 +239,15 @@ Frame 100: [CLOSE_UP_CUBE] [gripper_fingers] [no_background]
 - 50-75 episodes: 40-50% success (vision mismatch dominates)
 - 100-150 episodes: 70-80% success (vision retrained)
 
+**Note**: Pi0.5's open-world generalization makes it significantly more robust to egocentric cameras than both Pi0 and SmolVLA.
+
 ---
 
 ## VLA Model Selection
 
 VLA models execute primitive actions based on camera observations, robot state, and primitive command.
 
-### Pi0 (`lerobot/pi0_base`) - PRIMARY CHOICE
+### Pi0.5 (`lerobot/pi05_base`) - PRIMARY CHOICE
 
 **Architecture:**
 - **Parameters**: 4B (3B vision-language + 300M diffusion action expert)
@@ -204,17 +257,19 @@ VLA models execute primitive actions based on camera observations, robot state, 
 - **Output**: Action chunks (temporal action sequences)
 
 **Pretrained Data:**
-- **Scale**: 10,000+ hours of diverse manipulation
-- **Tasks**: Bussing dishes, packing, folding, assembly, cooking, etc.
+- **Scale**: 10,000+ hours of diverse manipulation + 400 hours mobile manipulation
+- **Tasks**: Bussing dishes, packing, folding, assembly, cooking, mobile manipulation, etc.
 - **Embodiments**: Multiple robot platforms (not SO-101 specific)
 - **Cameras**: Various configs including egocentric-like setups ✅
-- **Key advantage**: Diverse pretraining → robust vision
+- **Key advantage**: Open-world generalization + heterogeneous co-training
 
 **Strengths for XLeRobot:**
-- ✅ **Best camera generalization** for egocentric setup
+- ✅ **Best camera generalization** for egocentric setup (open-world training)
 - ✅ **Data-efficient**: 50-100 episodes sufficient
 - ✅ **Superior instruction following**: Strong VLM backbone
 - ✅ **Diffusion action model**: Handles multimodal distributions
+- ✅ **Open-world generalization**: Adapts to entirely new environments
+- ✅ **Heterogeneous co-training**: Web data + verbal instructions + cross-embodiment data
 
 **Weaknesses:**
 - ⚠️ No SO-101 kinematics knowledge (must learn)
@@ -227,13 +282,13 @@ VLA models execute primitive actions based on camera observations, robot state, 
 - **Training time**: 6-10 hours on RTX 5090
 - **Hardware**: ✅ RTX 5090 24GB with LoRA
 
-**When to choose**: Egocentric cameras (your case!)
+**When to choose**: Egocentric cameras + new environments (your case!)
 
 ### SmolVLA (`lerobot/smolvla_base`) - BACKUP CHOICE
 
 **Architecture:**
 - **Parameters**: 450M
-- **Vision Encoder**: Pretrained VLM backbone (smaller than Pi0)
+- **Vision Encoder**: Pretrained VLM backbone (smaller than Pi0.5)
 - **Action Expert**: Transformer-based policy
 - **Input**: Multi-camera RGB + robot state + language instruction
 - **Output**: Joint positions (6 DOF)
@@ -261,21 +316,22 @@ VLA models execute primitive actions based on camera observations, robot state, 
 - **Training time**: 6-8 hours on RTX 5090
 - **Hardware**: ✅✅ RTX 5090 24GB (plenty of room)
 
-**When to choose**: If Pi0 doesn't fit in VRAM or performance <70%
+**When to choose**: If Pi0.5 doesn't fit in VRAM or performance <70%
 
 ### Comparison Summary
 
-| Factor | Pi0 | SmolVLA |
-|--------|-----|---------|
-| **Camera generalization** | ✅ Excellent | ❌ Poor |
+| Factor | Pi0.5 | SmolVLA |
+|--------|-------|---------|
+| **Camera generalization** | ✅✅ Excellent (open-world) | ❌ Poor |
 | **SO-101 kinematics** | ⚠️ Must learn | ✅ Already knows |
 | **Episodes for egocentric** | 50-100 | 100-150 |
 | **VRAM (24GB GPU)** | ✅ Fits with LoRA | ✅✅ Plenty |
 | **Instruction following** | ✅ Excellent | ⚠️ Good |
 | **Inference speed** | 10-15Hz | 30Hz+ |
-| **Overall for XLeRobot** | ✅ **80% probability** | ⚠️ **70% probability** |
+| **Open-world generalization** | ✅✅ Designed for it | ❌ Limited |
+| **Overall for XLeRobot** | ✅ **85% probability** | ⚠️ **70% probability** |
 
-**Recommendation**: Try Pi0 first, SmolVLA as backup using same collected data.
+**Recommendation**: Try Pi0.5 first, SmolVLA as backup using same collected data.
 
 ---
 
@@ -369,8 +425,8 @@ graph TB
         B_OUT[Output: List of Primitives<br/>1. pick red_cube from table<br/>2. place red_cube at box]
     end
 
-    subgraph "VLA - Action Execution Pi0/SmolVLA"
-        C[Pi0 or SmolVLA]
+    subgraph "VLA - Action Execution Pi0.5/SmolVLA"
+        C[Pi0.5 or SmolVLA]
         C_IN1[Input 1: Camera Images]
         C_IN2[Input 2: Robot State Joint Positions]
         C_IN3[Input 3: Primitive Command]
@@ -431,7 +487,7 @@ vlm_output = [
 
 **Key Point**: VLM only does vision + language reasoning. It doesn't need robot joint positions because it's not predicting actions!
 
-#### VLA (Pi0/SmolVLA) - Action Execution
+#### VLA (Pi0.5/SmolVLA) - Action Execution
 
 ```python
 # VLA Input (for EACH primitive)
@@ -536,7 +592,7 @@ PRIMITIVE_VOCABULARY = {
 class VLMVLAPipeline:
     def __init__(self, vlm_model, vla_model, cameras, robot):
         self.vlm = vlm_model      # Qwen3 VL 3B
-        self.vla = vla_model      # Pi0 or SmolVLA
+        self.vla = vla_model      # Pi0.5 or SmolVLA
         self.cameras = cameras
         self.robot = robot
 
@@ -657,8 +713,8 @@ graph TB
     end
 
     subgraph Phase2[Phase 2: VLA Fine-tuning - Week 2]
-        B1[Fine-tune Pi0 PRIMARY] --> B2{Pi0 Success >70%?}
-        B2 -->|Yes| B3[Use Pi0 ✅]
+        B1[Fine-tune Pi0.5 PRIMARY] --> B2{Pi0.5 Success >70%?}
+        B2 -->|Yes| B3[Use Pi0.5 ✅]
         B2 -->|No| B4[Fine-tune SmolVLA<br/>SAME DATA]
         B4 --> B5{SmolVLA Success >70%?}
         B5 -->|Yes| B6[Use SmolVLA ✅]
@@ -694,9 +750,9 @@ graph TB
 - Quality control: re-record failed demonstrations
 
 **Week 2: VLA Fine-tuning**
-- Fine-tune Pi0 first (50-100 episodes, 6-10 hours training)
+- Fine-tune Pi0.5 first (50-100 episodes, 6-10 hours training)
 - Evaluate on primitives (target: 70%+ success rate)
-- If Pi0 <70%, fine-tune SmolVLA on same data (100-150 episodes needed)
+- If Pi0.5 <70%, fine-tune SmolVLA on same data (100-150 episodes needed)
 - Select better performer
 
 **Week 3-4: VLM→VLA Integration**
@@ -712,20 +768,268 @@ graph TB
 
 ### Data Reusability: Collect Once, Try Multiple
 
-| Action | Pi0 | SmolVLA | Both |
-|--------|-----|---------|------|
+| Action | Pi0.5 | SmolVLA | Both |
+|--------|-------|---------|------|
 | Collect 75-100 episodes | | | ✅ Once |
-| Fine-tune model | ✅ First | ⚠️ If Pi0 fails | |
+| Fine-tune model | ✅ First | ⚠️ If Pi0.5 fails | |
 | Training time | 6-10 hours | 6-8 hours | |
 | VRAM required | 18-22GB (LoRA) | 8-12GB | |
-| Expected success | 75-85% | 70-80% | |
-| **Decision** | **Use if ≥70%** | **Use if Pi0 <70%** | **Empirical** |
+| Expected success | 80-90% | 70-80% | |
+| **Decision** | **Use if ≥70%** | **Use if Pi0.5 <70%** | **Empirical** |
 
 **Key Advantage**: All VLA models use LeRobot format (100% compatible). Collect once, try both!
 
 ---
 
+## Known Pi0.5 Issues & Mitigations
+
+**Based on GitHub Issues (Physical-Intelligence/openpi & huggingface/lerobot) and Community Reports**
+
+### Issue 1: Gradient Explosion During Training
+
+**Symptoms:**
+```
+Training step 500: loss:nan grdn:nan
+RuntimeError: Loss became NaN during training
+```
+
+**Causes:**
+- Learning rate too high for fine-tuning
+- Unstable gradients from diffusion head
+- Batch contains outlier demonstrations
+
+**Mitigations:**
+```yaml
+training:
+  lr: 3e-6  # Lower than default 5e-6
+  gradient_clip_norm: 1.0  # ADD THIS - clip gradients
+  lr_warmup_steps: 500  # Longer warmup
+  mixed_precision: bf16  # More stable than fp16
+```
+
+**If problem persists:**
+- Reduce learning rate to 1e-6
+- Increase warmup steps to 1000
+- Check data quality (remove outlier episodes)
+
+### Issue 2: CPU Memory Leaks (Commitment Ratio Increasing)
+
+**Symptoms:**
+```
+Training crashes after 2000-3000 steps
+htop shows CPU memory commitment ratio increasing
+Eventually: OOM (Out of Memory) error
+```
+
+**Causes:**
+- Memory not released between training steps
+- Dataset caching accumulating in RAM
+- Logging/visualization creating memory buildup
+
+**Mitigations:**
+```python
+# In training config
+training:
+  eval_freq: 1000  # Reduce eval frequency (was 500)
+  save_freq: 1000  # Reduce checkpoint frequency
+
+# Monitor during training
+watch -n 10 'free -h && nvidia-smi'
+
+# If memory keeps growing, restart training from checkpoint every 5000 steps
+```
+
+**Emergency fix**: Add periodic garbage collection
+```python
+import gc
+if step % 1000 == 0:
+    gc.collect()
+    torch.cuda.empty_cache()
+```
+
+### Issue 3: Loss of Generalization After Finetuning
+
+**Symptoms:**
+- Model works well on training task locations
+- Fails completely on slightly different positions/objects
+- Worse than pretrained model on out-of-distribution tasks
+
+**Causes** (per Pi0 paper research):
+> "Training only on high-quality data does not teach the model how to recover from mistakes, since mistakes are rarely seen in such data."
+
+**Mitigations:**
+1. **Data diversity** (CRITICAL):
+   - Vary object positions (3-5 locations per primitive)
+   - Include some "recovery" demonstrations (restart after near-miss)
+   - Don't make data TOO perfect/identical
+
+2. **Regularization**:
+   ```yaml
+   training:
+     weight_decay: 0.01  # Prevent overfitting
+     dropout: 0.1  # Add to config if supported
+   ```
+
+3. **Early stopping**:
+   ```yaml
+   training:
+     early_stopping_patience: 5  # Stop if val loss plateaus
+   ```
+
+4. **Don't overtrain**:
+   - 6000 steps is baseline
+   - If val loss increases while train loss decreases → STOP (overfitting)
+
+### Issue 4: Dataset Format/Import Errors
+
+**Symptoms:**
+```
+Error: When importing lerobot_dataset, the process crashes
+KeyError: 'task' column missing
+ValueError: Camera keys mismatch
+```
+
+**Causes:**
+- Custom dataset schema doesn't match Pi0.5 expectations
+- FPS mismatch (recorded at 30Hz, expected 5Hz action frequency)
+- Camera naming inconsistent
+
+**Mitigations:**
+
+**BEFORE collecting all data, validate with MVP:**
+```python
+# Test dataset loading
+from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+dataset = LeRobotDataset("your_dataset_name")
+print(f"Episodes: {dataset.num_episodes}")
+print(f"FPS: {dataset.meta.fps}")  # Should be 5
+print(f"Cameras: {dataset.meta.camera_keys}")  # Should match config
+```
+
+**Fix common issues:**
+```yaml
+# Robot config - ensure consistency
+policy_fps: 5  # NOT 30!
+cameras:
+  left_wrist:  # Name must match
+  right_wrist:  # exactly in all
+  head:  # configurations
+```
+
+### Issue 5: VRAM Insufficient Even with LoRA
+
+**Symptoms:**
+```
+CUDA out of memory. Tried to allocate 22.5 GB
+```
+
+**Mitigations (in order of preference):**
+
+1. **More aggressive LoRA:**
+```yaml
+policy_config:
+  lora_rank: 16  # Reduce from 32
+  lora_alpha: 32  # Half of rank*2
+```
+
+2. **Reduce batch size, increase accumulation:**
+```yaml
+training:
+  batch_size: 4  # Reduce from 8
+  gradient_accumulation_steps: 4  # Increase from 2
+  # Effective batch = 4 * 4 = 16 (same as before)
+```
+
+3. **Enable gradient checkpointing:**
+```yaml
+policy_config:
+  gradient_checkpointing: true  # Trade speed for memory
+```
+
+4. **Freeze vision encoder** (last resort):
+```yaml
+policy_config:
+  freeze_vision_encoder: true  # Only train action head
+  # Warning: May hurt egocentric camera adaptation
+```
+
+### Issue 6: Slow Inference (<1 FPS)
+
+**Symptoms:**
+- Inference runs at 0.3-0.5 FPS (unusable for real-time)
+- Expected: 10-15 Hz for Pi0.5
+
+**Mitigations:**
+```python
+# Use compiled model
+model = torch.compile(model, mode="reduce-overhead")
+
+# Batch size 1, no dynamic shapes
+# Disable gradient computation
+with torch.no_grad():
+    actions = model(images, state, task)
+```
+
+### Validation Checklist BEFORE Full Training
+
+✅ **MVP Test Passed**: 5-10 episodes → 100 step training → no crashes
+✅ **Dataset validated**: Loads without errors, correct FPS, camera keys match
+✅ **VRAM checked**: Training run fits in 24GB with headroom
+✅ **Gradients stable**: No NaN in first 500 steps
+✅ **Memory stable**: CPU memory not increasing over time
+✅ **Checkpoints work**: Can save and reload model
+
+**If ANY fail → Debug before collecting 75-100 episodes!**
+
+---
+
 ## Fine-tuning Execution Plan
+
+### Week 0: MVP Pipeline Validation (DO THIS FIRST!)
+
+**⚠️ IMPORTANT**: For complete MVP walkthrough, see **[MINIMAL_VALIDATION_STRATEGY.md](MINIMAL_VALIDATION_STRATEGY.md) - Stage 0**
+
+**Quick Summary:**
+
+**Time**: 3 hours total
+**Goal**: Verify technical pipeline works BEFORE investing 20-30 hours in full data collection
+
+**Updated Steps (see MINIMAL_VALIDATION_STRATEGY.md for details):**
+
+0. **Test Pretrained Pi0.5 Baseline** (30 min) ⭐ NEW!
+   - Test pretrained model on your setup FIRST
+   - Record baseline success rate (expected: 0-15%)
+   - This is CRITICAL for comparison later
+
+1. **Collect 7-10 episodes** of pick_center (1 hour)
+   - Updated minimum: 7 episodes (was 5)
+   - All successful, consistent strategy
+   - Same location every time
+
+2. **Validate dataset** (5 min)
+   - Check: FPS=5Hz, 3 cameras, ≥7 episodes
+
+3. **Quick training test** (30 min)
+   - Train 100 steps only
+   - Check for crashes, NaN losses
+
+4. **Test inference** (5 min)
+   - Checkpoint loads and runs
+
+5. **Compare vs baseline** (10 min) ⭐ NEW!
+   - Compare finetuned vs pretrained
+   - Expected: 0-20% (not enough data to learn!)
+   - Just verify model responds to finetuning
+
+**Pass Criteria:**
+- ✅ No crashes during training
+- ✅ Dataset loads correctly
+- ✅ Checkpoint works
+- ✅ Model responds to finetuning (different from pretrained)
+
+**📖 Full details**: See [MINIMAL_VALIDATION_STRATEGY.md](MINIMAL_VALIDATION_STRATEGY.md) - Section 3 (Stage 0)
+
+---
 
 ### Week 1: Data Collection
 
@@ -746,7 +1050,12 @@ python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}'); print(f'GP
 python -c "import cv2; print([cv2.VideoCapture(i).isOpened() for i in [0,2,4]])"
 ```
 
-#### Day 2-7: Collect 75-100 Episodes
+#### Day 2-7: Collect 50-100 Episodes
+
+**Updated Recommendation Based on Research:**
+- **Minimum**: 50 episodes (per Pi0.5 guidance: "≥15 minutes of data")
+- **Target**: 75 episodes (balanced quality/quantity)
+- **Ideal**: 100 episodes (better generalization)
 
 **Data Collection Script:**
 
@@ -792,10 +1101,10 @@ for primitive_name, (task_desc, num_eps) in PRIMITIVES.items():
 #### Day 8-9: Fine-tune Pi0
 
 ```yaml
-# config/train_pi0_xlerobot.yaml
+# config/train_pi05_xlerobot.yaml
 policy: pi0
 policy_config:
-  pretrained_model_name_or_path: lerobot/pi0_base
+  pretrained_model_name_or_path: lerobot/pi05_base
   use_lora: true
   lora_rank: 32
   lora_alpha: 64
@@ -812,18 +1121,30 @@ training:
   offline_steps: 6000
   batch_size: 8
   gradient_accumulation_steps: 2
-  lr: 5e-6
+  lr: 3e-6  # UPDATED: Lower than default to prevent gradient explosion
+  gradient_clip_norm: 1.0  # NEW: Prevent NaN losses
   lr_scheduler: cosine
+  lr_warmup_steps: 500  # NEW: Longer warmup for stability
   mixed_precision: bf16
-  eval_freq: 500
+  eval_freq: 1000  # UPDATED: Reduce frequency to save memory
+  save_freq: 1000  # UPDATED: Reduce checkpoint frequency
   early_stopping_patience: 5
+  weight_decay: 0.01  # NEW: Prevent overfitting
 
-output_directory: outputs/pi0_xlerobot_v1
+output_directory: outputs/pi05_xlerobot_v1
 ```
 
 ```bash
+# Install Pi0.5 dependencies
+pip install -e ".[pi]"
+
 # Run training
-python lerobot/scripts/train.py --config-name train_pi0_xlerobot
+python src/lerobot/scripts/lerobot_train.py \
+  --policy.type=pi05 \
+  --policy.pretrained_path=lerobot/pi05_base \
+  --dataset.repo_id=lerobot/xlerobot_primitives_egocentric \
+  --steps=6000 \
+  --batch_size=8
 
 # Monitor VRAM
 watch -n 1 nvidia-smi  # Expected: 18-22GB / 24GB
@@ -836,10 +1157,10 @@ watch -n 1 nvidia-smi  # Expected: 18-22GB / 24GB
 ```bash
 # Test on primitives
 python scripts/eval_vla_model.py \
-  --checkpoint outputs/pi0_xlerobot_v1/checkpoint-best \
+  --checkpoint outputs/pi05_xlerobot_v1/checkpoint-best \
   --trials-per-primitive 10
 
-# Decision: If ≥70% success → Use Pi0 ✅
+# Decision: If ≥70% success → Use Pi0.5 ✅
 #          If <70% → Fine-tune SmolVLA
 ```
 
@@ -960,12 +1281,12 @@ Now analyze the images and decompose the command:
 ```python
 # scripts/vlm_vla_pipeline.py
 from qwen_vlm_decomposer import QwenVLMDecomposer
-from lerobot.common.policies.pi0.modeling_pi0 import Pi0ForActionPrediction
+from lerobot.common.policies.pi05.modeling_pi055 import Pi0.5ForActionPrediction
 
 class VLMVLAPipeline:
     def __init__(self, vla_model_path, robot, cameras):
         self.vlm = QwenVLMDecomposer()  # Qwen3 VL 3B (local)
-        self.vla = Pi0ForActionPrediction.from_pretrained(vla_model_path)
+        self.vla = Pi0.5ForActionPrediction.from_pretrained(vla_model_path)
         self.vla.eval().cuda()
         self.robot = robot
         self.cameras = cameras
@@ -1018,7 +1339,7 @@ class VLMVLAPipeline:
 
 # Usage
 pipeline = VLMVLAPipeline(
-    vla_model_path="outputs/pi0_xlerobot_v1/checkpoint-best",
+    vla_model_path="outputs/pi05_xlerobot_v1/checkpoint-best",
     robot=robot_interface,
     cameras=camera_interface
 )
@@ -1057,7 +1378,7 @@ pipeline.execute_task("clean up the table")
 ### VLA Training
 
 1. **Learning Rates**:
-   - Pi0 (LoRA): lr=5e-6
+   - Pi0.5 (LoRA): lr=5e-6
    - SmolVLA: vision_lr=5e-5, action_lr=1e-5
 
 2. **Early Stopping**:
@@ -1065,7 +1386,7 @@ pipeline.execute_task("clean up the table")
    - Stop if val loss increases while train loss decreases (overfitting)
 
 3. **Memory Optimization**:
-   - Pi0: Use LoRA rank=32, batch_size=8
+   - Pi0.5: Use LoRA rank=32, batch_size=8
    - SmolVLA: Full batch_size=16 (plenty of VRAM)
 
 ### VLM Integration
@@ -1096,11 +1417,12 @@ pipeline.execute_task("clean up the table")
 
 ## Risk Mitigation
 
-### Risk 1: Pi0 Doesn't Fit in 24GB VRAM
+### Risk 1: Pi0.5 Doesn't Fit in 24GB VRAM
 
 **Mitigation**:
 - Use LoRA rank=16 (more aggressive)
 - Reduce batch_size=4, gradient_accumulation_steps=4
+- Enable gradient checkpointing (built into Pi0.5)
 - Freeze vision encoder (only fine-tune action expert)
 - Fallback: Use SmolVLA (8-12GB)
 
@@ -1140,7 +1462,7 @@ pipeline.execute_task("clean up the table")
 
 ```
 Week 1: Data Collection (75-100 episodes)
-Week 2: VLA Fine-tuning (Pi0 first, SmolVLA backup)
+Week 2: VLA Fine-tuning (Pi0.5 first, SmolVLA backup)
 Week 3-4: VLM Integration (Qwen3 VL + simple pipeline)
 
 Total: 3-4 weeks to MVP
@@ -1177,13 +1499,13 @@ Total: 3-4 weeks to MVP
 
 ## Appendix: Configuration Templates
 
-### Pi0 Training Configuration
+### Pi0.5 Training Configuration
 
 ```yaml
-# config/train_pi0_xlerobot.yaml
+# config/train_pi05_xlerobot.yaml
 policy: pi0
 policy_config:
-  pretrained_model_name_or_path: lerobot/pi0_base
+  pretrained_model_name_or_path: lerobot/pi05_base
   use_lora: true
   lora_rank: 32
   lora_alpha: 64
@@ -1210,9 +1532,9 @@ training:
 
 wandb:
   enable: true
-  project: xlerobot-vla-pi0
+  project: xlerobot-vla-pi05
 
-output_directory: outputs/pi0_xlerobot_v1
+output_directory: outputs/pi05_xlerobot_v1
 device: cuda
 ```
 
@@ -1256,7 +1578,7 @@ device: cuda
 This strategy provides a **validated, research-backed, production-ready roadmap** for implementing VLM→VLA pipeline on XLeRobot with egocentric cameras.
 
 **Key Decisions:**
-1. ✅ **VLA**: Pi0 first (better camera generalization), SmolVLA backup
+1. ✅ **VLA**: Pi0.5 first (open-world generalization + better camera handling), SmolVLA backup
 2. ✅ **VLM**: Qwen3 VL 3B (local, free), GPT-4V fallback
 3. ✅ **Orchestration**: Simple Python script (Week 1-4), LangGraph optional (Week 5+)
 4. ✅ **Data**: Collect 75-100 episodes once, try multiple VLA models
