@@ -103,6 +103,9 @@ jdocs/top_level/datasets/
 jdocs/top_level/done/
 jdocs/top_level/failed_datasets/
 
+# Training outputs and checkpoints
+outputs/
+
 # Ignore web_control artefacts already covered locally
 web_control/client/node_modules/
 web_control/client/dist/

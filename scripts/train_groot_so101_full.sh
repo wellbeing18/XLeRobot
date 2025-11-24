@@ -31,7 +31,7 @@ DATASET_PATH="/home/jrobot/project/XLeRobot/jdocs/top_level/datasets"
 #       DATASET_PATH="/home/jrobot/project/XLeRobot/jdocs/top_level/datasets_v2"
 
 OUTPUT_DIR="/home/jrobot/project/XLeRobot/outputs/groot_so101_v1"
-ISAAC_GROOT_ROOT="${ISAAC_GROOT_ROOT:-$HOME/Isaac-GR00T}"
+ISAAC_GROOT_ROOT="${ISAAC_GROOT_ROOT:-$HOME/project/Isaac-GR00T}"
 
 # Training hyperparameters (NVIDIA recommended for SO-101)
 MAX_STEPS=10000

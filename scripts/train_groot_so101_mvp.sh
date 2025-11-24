@@ -32,7 +32,7 @@ DATASET_PATH="/home/jrobot/project/XLeRobot/jdocs/top_level/datasets"
 #       DATASET_PATH="/home/jrobot/project/XLeRobot/jdocs/top_level/datasets_v2"
 
 OUTPUT_DIR="/home/jrobot/project/XLeRobot/outputs/groot_mvp_test"
-ISAAC_GROOT_ROOT="${ISAAC_GROOT_ROOT:-$HOME/Isaac-GR00T}"
+ISAAC_GROOT_ROOT="${ISAAC_GROOT_ROOT:-$HOME/project/Isaac-GR00T}"
 
 # Check if Isaac-GR00T is installed
 if [ ! -d "$ISAAC_GROOT_ROOT" ]; then
