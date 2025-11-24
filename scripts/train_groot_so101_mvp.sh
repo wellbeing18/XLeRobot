@@ -149,7 +149,8 @@ python scripts/gr00t_finetune.py \
     --no-tune_diffusion_model \
     --save-steps 500 \
     --logging-steps 10 \
-    --seed 1000
+    --seed 1000 \
+    --report-to tensorboard
 
 echo ""
 echo "========================================================================"

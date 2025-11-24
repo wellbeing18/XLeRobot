@@ -211,6 +211,7 @@ python scripts/gr00t_finetune.py \
     --save-steps 100 \
     --logging-steps 5 \
     --seed 1000 \
+    --report-to tensorboard \
     2>&1 | tee $OUTPUT_DIR/mini_mvp_training.log
 
 TRAINING_EXIT_CODE=$?

@@ -100,6 +100,7 @@ software/**/test_output*.log
 
 # LeRobot datasets (large video/parquet files)
 jdocs/top_level/datasets/
+jdocs/top_level/datasets_groot/
 jdocs/top_level/done/
 jdocs/top_level/failed_datasets/
 

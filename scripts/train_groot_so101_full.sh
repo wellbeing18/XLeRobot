@@ -169,7 +169,8 @@ python scripts/gr00t_finetune.py \
     --logging-steps $LOGGING_STEPS \
     --warmup-steps 500 \
     --gradient-accumulation-steps 1 \
-    --seed 1000
+    --seed 1000 \
+    --report-to tensorboard
 
 echo ""
 echo "========================================================================"
