@@ -8,6 +8,9 @@
 
 set -e  # Exit on error
 
+# Suppress torchvision video deprecation warnings (harmless, just clutters logs)
+export PYTHONWARNINGS="ignore::UserWarning:torchvision.io"
+
 echo "========================================================================"
 echo "GR00T Mini-MVP Pipeline Test - SO-101 Left Arm"
 echo "========================================================================"

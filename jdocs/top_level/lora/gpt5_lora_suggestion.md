@@ -245,3 +245,117 @@ Things to revisit as we gain experience:
 This document should be updated as we implement the GR00T pipeline and, later, Pi0.5 LoRA. For now, it captures the current best recommendation: **GR00T N1.5 as the primary LoRA‑finetuned VLA on SO‑101, with Pi0.5 LoRA as a follow‑up experiment once the GR00T path is solid.**
 
 
+## 7. Post‑Implementation Review of Pi0.5 LoRA Integration
+
+This section captures a focused review of the **actual Pi0.5 LoRA implementation** we now have in the LeRobot fork, so future readers can quickly verify that the code matches the design intent from this document.
+
+### 7.1 Overall Verdict
+
+- **Status**: The Pi0.5 LoRA implementation in `configuration_pi05.py` and `modeling_pi05.py` is **technically sound and consistent** with:
+  - LeRobot’s config / training pipeline (`TrainPipelineConfig`, `make_policy`, `lerobot_train.py`).
+  - PEFT best practices for base transformer models (no `task_type`, apply LoRA after weight loading, handle GC carefully).
+- **Consequence**: It is reasonable to proceed to longer runs (MVP 500 steps, then ~6000 steps), watching VRAM and normalization as usual but not expecting structural issues from the LoRA plumbing itself.
+
+### 7.2 Config & CLI Wiring (`PI05Config` + `lerobot-train`)
+
+- **LoRA fields** (`configuration_pi05.py`):
+  - `use_lora`, `lora_rank`, `lora_alpha`, `lora_dropout` are correctly added to `PI05Config` with sensible defaults (rank 16, alpha 32, dropout 0.1).
+  - These fields are exactly what your training script uses:
+    - `--policy.use_lora=true`
+    - `--policy.lora_rank=16`
+    - `--policy.lora_alpha=32`
+    - `--policy.lora_dropout=0.1`
+- **Config loading path**:
+  - `TrainPipelineConfig.validate()` sees `--policy.path=lerobot/pi05_base`, calls `PreTrainedConfig.from_pretrained(...)` with CLI overrides, and sets `policy.pretrained_path`.
+  - `make_policy` then:
+    - Infers input/output features from dataset metadata.
+    - Calls `policy_cls.from_pretrained(pretrained_name_or_path=cfg.pretrained_path, config=cfg)` for `PI05Policy`.
+- **Normalization stats**:
+  - When `cfg.policy.pretrained_path` is set and we’re not resuming, `lerobot_train` injects `dataset.meta.stats` into the normalizer processor.
+  - This is aligned with the mitigation for OpenPI issue #711 (fresh quantile stats on the finetuning dataset, not reusing pretraining stats).
+
+### 7.3 Where LoRA Is Actually Applied (`PI05Pytorch`)
+
+- **Core logic**:
+  - `PI05Pytorch` defines `_apply_lora()` and `apply_lora_if_enabled()`.
+  - `_apply_lora()`:
+    - Builds a `LoraConfig` with:
+      - `r=config.lora_rank`, `lora_alpha=config.lora_alpha`, `lora_dropout=config.lora_dropout`.
+      - `target_modules`:
+        - `self_attn.q_proj`, `k_proj`, `v_proj`, `o_proj`
+        - `mlp.gate_proj`, `mlp.up_proj`, `mlp.down_proj`
+    - Wraps:
+      - `paligemma.model.language_model` (text transformer inside `PaliGemmaForConditionalGeneration`).
+      - `gemma_expert.model` (Gemma action expert transformer).
+  - `apply_lora_if_enabled()` is called **after** the pretrained state dict is loaded (see §7.4).
+- **Precision & gradient checkpointing handling**:
+  - Before wrapping, the code snapshots each submodel’s `gradient_checkpointing` flag, sets it to `False`, then recreates it on the `PeftModel` and restores the flag.
+  - This is important because:
+    - PEFT’s `enable_input_require_grads()` logic is fragile for models with missing `embed_tokens` (like the expert).
+    - You want to control checkpointing at the Pi0.5 wrapper level (`PI05Pytorch.gradient_checkpointing_enable()`), not from inside PEFT.
+- **Non‑LoRA’d components** (remain standard PyTorch modules as intended):
+  - Vision tower (SigLIP).
+  - `action_in_proj`, `action_out_proj` (small, task‑specific projections).
+  - `time_mlp_in`, `time_mlp_out` (flow‑matching conditioning MLP).
+  - This matches the design in the validation report and keeps the LoRA scope focused on the two big text backbones.
+
+### 7.4 Load‑Order & State‑Dict Remapping (`PI05Policy.from_pretrained`)
+
+- **Correct load order**:
+  - In `PI05Policy.from_pretrained`:
+    1. If needed, load a `PI05Config` via `PreTrainedConfig.from_pretrained(...)`.
+    2. Instantiate `PI05Policy(config)`, which builds `PI05Pytorch(config)` (Paligemma + Gemma expert).
+    3. Use `transformers.utils.cached_file` + `safetensors.torch.load_file` to get the original OpenPI‑style `model.safetensors`.
+    4. Run `_fix_pytorch_state_dict_keys(...)` to:
+       - Handle adaRMS vs standard layernorm mismatches.
+       - Rename `action_time_mlp_*` → `time_mlp_*`.
+       - Drop `state_proj.*` keys that don’t exist in Pi0.5.
+       - Emit warnings for vision `patch_embedding` keys (informational only).
+    5. Prefix any keys that don’t start with `"model."` with `"model."`.
+    6. Call `model.load_state_dict(remapped_state_dict, strict=strict)`.
+    7. **Only then** call `model.model.apply_lora_if_enabled()`.
+- **Effect**:
+  - The base weights loaded from `lerobot/pi05_base` are fully applied to the un‑wrapped transformer modules.
+  - PEFT wraps the final, correct transformers, so the LoRA adapter state is initialized on top of the pretrained weights (no key mismatch).
+- **Behavior vs base `PreTrainedPolicy`**:
+  - The override does **all** of the above remapping, which the generic version cannot do; this is required for OpenPI → LeRobot compatibility.
+  - The only divergence is that `PI05Policy.from_pretrained` does **not** call `.eval()` or `.to(config.device)` at the end. This is harmless for `lerobot-train` (which calls `policy.to(cfg.device)` and then `.train()`), but is good to remember if you ever use `PI05Policy.from_pretrained` directly for inference.
+
+### 7.5 Training Script Review (`train_pi05_mini_mvp.sh`)
+
+- **Script wiring**:
+  - Uses `lerobot-train` with:
+    - `--policy.path=lerobot/pi05_base`
+    - `--policy.use_lora=true`, `--policy.lora_rank=16`, `--policy.lora_alpha=32`, `--policy.lora_dropout=0.1`
+    - `--policy.gradient_checkpointing=true`
+    - Dataset settings pointing at a LeRobot v3 dataset and `pyav` as the video backend.
+  - Respects LeRobot’s requirement that `--output_dir` **must not exist** before the run (lets the framework create it).
+  - Saves a temp log to `/tmp/...` and copies it into the output directory after training, which is useful for inspection and matches the validation report.
+- **Environment checks**:
+  - Explicitly verifies PyTorch, CUDA, PEFT, and `PI05Policy` imports in the `lerobot` conda env before training.
+  - This is consistent with how we expect the Pi0.5 LoRA path to be used in practice and supports the “mini‑MVP” validation goal.
+
+### 7.6 Alignment with the Strategy in This Document
+
+- The **implemented Pi0.5 LoRA path** matches the long‑term plan sketched in §5:
+  - Config has LoRA toggles and hyperparameters.
+  - `modeling_pi05.py` wires PEFT into both PaliGemma and the action expert.
+  - LoRA is exposed and controlled via the standard `lerobot-train` CLI.
+  - A tiny 100‑step MVP run exists and behaves healthily (loss and gradient trends as reported).
+- The only notable differences from the earlier “wish list” are:
+  - LoRA is applied **after** loading pretrained weights instead of at `__init__` time (which is actually better than the original sketch).
+  - Rank/alpha defaults are tuned to 16/32 instead of the earlier 32/64 suggestion, to keep memory more comfortable on 24 GB.
+
+### 7.7 Suggested Small Follow‑Ups (Non‑Blocking)
+
+- **Config hygiene**:
+  - `PI05Config` currently defines `tokenizer_max_length` twice with the same value; keeping just one definition would reduce confusion.
+- **Optional behavior parity with `PreTrainedPolicy`**:
+  - If you expect frequent direct use of `PI05Policy.from_pretrained` outside `lerobot-train`, consider adding `model.to(config.device)` and `model.eval()` at the end for consistency with other policies.
+- **Future flexibility** (if/when needed):
+  - Add an optional flag like `lora_target_mlp: bool = True` to support an “attention‑only LoRA” mode (GR00T‑style) when VRAM is extremely tight.
+  - Optionally disable EMA when `use_lora` is `True` (mirroring OpenPI’s JAX LoRA setup), if you later adopt EMA in your training recipes.
+
+In summary, the **current Pi0.5 LoRA implementation is in good shape**: it respects the architecture and training stack described in this document, follows PEFT best practices, and has already passed a mini‑MVP validation run. It is now a viable secondary path alongside the GR00T‑first strategy described above.
+
+
